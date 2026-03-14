@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Маршрут к 100 баллам по физике</title>
+    
+    <!-- Подключаем стили Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Подключаем иконки Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Подключаем React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Подключаем Babel для компиляции JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        .slide-up { animation: slideUp 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Паттерн для фона */
+        .bg-topography {
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23cbd5e1' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans selection:bg-indigo-200 text-slate-800">
+    
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- Вспомогательные компоненты ---
+        
+        const Section = ({ iconClass, title, children, color = "indigo", stepNumber }) => {
+            const colorMap = {
+                blue: "text-blue-500 bg-blue-50 border-blue-200 ring-blue-100",
+                emerald: "text-emerald-500 bg-emerald-50 border-emerald-200 ring-emerald-100",
+                amber: "text-amber-500 bg-amber-50 border-amber-200 ring-amber-100",
+                rose: "text-rose-500 bg-rose-50 border-rose-200 ring-rose-100",
+                indigo: "text-indigo-500 bg-indigo-50 border-indigo-200 ring-indigo-100",
+                purple: "text-purple-500 bg-purple-50 border-purple-200 ring-purple-100",
+                slate: "text-slate-600 bg-slate-50 border-slate-200 ring-slate-100",
+            };
+
+            const headerClasses = colorMap[color];
+            const borderColor = colorMap[color].split(' ')[2]; // gets the border color class
+
+            return (
+                <section className="mb-12 relative slide-up">
+                    {/* Линия таймлайна слева (скрыта на мобилках, видна на десктопе) */}
+                    <div className="hidden md:block absolute left-[-2rem] top-10 bottom-[-3rem] w-1 bg-slate-200 rounded-full z-0"></div>
+                    
+                    <div className={`bg-white rounded-2xl shadow-sm border ${borderColor} overflow-hidden relative z-10 hover:shadow-md transition-shadow duration-300`}>
+                        {stepNumber && (
+                            <div className={`absolute top-0 right-0 w-16 h-16 ${headerClasses.split(' ')[1]} rounded-bl-3xl flex items-start justify-end p-3 font-black text-2xl opacity-50`}>
+                                #{stepNumber}
+                            </div>
+                        )}
+                        <div className={`p-6 border-b flex items-center gap-4 ${headerClasses.split(' ')[1]}`}>
+                            <div className={`p-3 rounded-xl bg-white shadow-sm flex items-center justify-center ${colorMap[color].split(' ')[0]}`}>
+                                <i className={`${iconClass} text-2xl font-bold`}></i>
+                            </div>
+                            <h2 className="text-2xl font-bold">{title}</h2>
+                        </div>
+                        <div className="p-6 leading-relaxed">
+                            {children}
+                        </div>
+                    </div>
+                </section>
+            );
+        };
+
+        const TopicCard = ({ icon, title, desc, color = "blue" }) => {
+            const colorMap = {
+                blue: "text-blue-600 bg-blue-100 group-hover:bg-blue-500 group-hover:text-white",
+                emerald: "text-emerald-600 bg-emerald-100 group-hover:bg-emerald-500 group-hover:text-white",
+                amber: "text-amber-600 bg-amber-100 group-hover:bg-amber-500 group-hover:text-white",
+                rose: "text-rose-600 bg-rose-100 group-hover:bg-rose-500 group-hover:text-white",
+                purple: "text-purple-600 bg-purple-100 group-hover:bg-purple-500 group-hover:text-white",
+            };
+
+            return (
+                <a href={`${title}.html`} className="group flex items-start gap-4 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer" title={`Перейти к теме: ${title}`}>
+                    <div className={`p-3 rounded-xl transition-colors duration-300 ${colorMap[color]}`}>
+                        <i className={`ph ${icon} text-xl font-bold`}></i>
+                    </div>
+                    <div>
+                        <div className="font-bold text-slate-800 text-sm mb-1 group-hover:text-indigo-600 transition-colors">{title}</div>
+                        <div className="text-xs text-slate-500 leading-snug">{desc}</div>
+                    </div>
+                </a>
+            );
+        };
+
+        const ActionChoice = ({ icon, title, desc }) => (
+            <button className="text-left w-full group p-5 bg-white border-2 border-slate-200 rounded-2xl hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-300 shadow-sm hover:shadow-md relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500 rounded-bl-full opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                <div className="flex items-center gap-4 mb-2">
+                    <div className="p-3 bg-slate-100 group-hover:bg-indigo-500 group-hover:text-white text-slate-600 rounded-xl transition-colors">
+                        <i className={`ph ${icon} text-2xl`}></i>
+                    </div>
+                    <h3 className="font-bold text-lg text-slate-800 group-hover:text-indigo-900 transition-colors">{title}</h3>
+                </div>
+                <p className="text-sm text-slate-600 group-hover:text-indigo-700 ml-[3.25rem] transition-colors">{desc}</p>
+                <div className="mt-4 text-xs font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity ml-[3.25rem] flex items-center gap-1">
+                    Обсудить эту тему <i className="ph ph-arrow-right"></i>
+                </div>
+            </button>
+        );
+
+        // --- Главное приложение ---
+        function App() {
+            return (
+                <div className="min-h-screen bg-topography">
+                    
+                    {/* Header */}
+                    <header className="bg-slate-900 text-white overflow-hidden relative shadow-lg">
+                        <div className="absolute inset-0 opacity-30">
+                            {/* Animated Background Path */}
+                            <svg className="w-full h-full" viewBox="0 0 1000 400" preserveAspectRatio="none">
+                                <path d="M 0 200 C 200 300, 400 100, 600 250 C 800 400, 1000 100, 1200 200" fill="none" stroke="#4f46e5" strokeWidth="4" strokeDasharray="10 10">
+                                    <animate attributeName="stroke-dashoffset" from="100" to="0" dur="2s" repeatCount="indefinite" linear />
+                                </path>
+                                <circle r="8" fill="#fbbf24">
+                                    <animateMotion dur="8s" repeatCount="indefinite" path="M 0 200 C 200 300, 400 100, 600 250 C 800 400, 1000 100, 1200 200" />
+                                </circle>
+                            </svg>
+                        </div>
+                        <div className="max-w-4xl mx-auto px-6 py-24 relative z-10 text-center">
+                            <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-amber-500/20 text-amber-300 font-bold mb-6 border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                                <i className="ph ph-medal text-xl"></i> Маршрут к 100 баллам
+                            </div>
+                            <h1 className="text-5xl md:text-7xl font-extrabold mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 drop-shadow-sm">
+                                Стратегия подготовки
+                            </h1>
+                            <p className="text-xl text-slate-300 max-w-2xl mx-auto font-light leading-relaxed">
+                                Для достижения максимального результата на ЕГЭ по физике весь материал выстраивается в виде последовательного маршрута по четырем основным разделам.
+                            </p>
+                        </div>
+                    </header>
+
+                    <main className="max-w-4xl mx-auto px-6 py-12 md:pl-16 relative">
+                        
+                        {/* Фундамент */}
+                        <div className="mb-12 relative slide-up">
+                            <div className="hidden md:block absolute left-[-2rem] top-10 bottom-[-3rem] w-1 bg-slate-200 rounded-full z-0"></div>
+                            <div className="bg-slate-800 rounded-2xl p-6 md:p-8 shadow-xl text-white relative z-10 border border-slate-700 overflow-hidden">
+                                <div className="absolute -right-10 -bottom-10 opacity-10"><i className="ph ph-function text-9xl"></i></div>
+                                <div className="flex items-center gap-4 mb-4 relative z-10">
+                                    <div className="p-3 bg-slate-700 rounded-xl text-amber-400">
+                                        <i className="ph ph-math-operations text-3xl"></i>
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-white">Фундамент: Математический аппарат</h2>
+                                </div>
+                                <p className="text-slate-300 relative z-10 text-lg">
+                                    Прежде чем приступать к физике, необходимо заложить базу. <span className="text-amber-300 font-semibold">Векторы, проекции, графики, работа с уравнениями и производными</span> — это язык, на котором говорят все физические законы. Без них дальнейший путь будет невозможен.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Раздел 1 */}
+                        <Section stepNumber="1" iconClass="ph ph-gear-six" title="Раздел 1: Механика" color="blue">
+                            <p className="mb-6 text-slate-600">Основа всей физики. Изучает движение тел и причины, его вызывающие. Самый объемный раздел экзамена.</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <TopicCard color="blue" icon="ph-car-profile" title="Кинематика" desc="Равномерное и равноускоренное движение, баллистика, движение по окружности." />
+                                <TopicCard color="blue" icon="ph-barbell" title="Динамика" desc="Законы Ньютона, виды сил (трение, упругость, тяжесть), блоки и связанные тела." />
+                                <TopicCard color="blue" icon="ph-scales" title="Статика" desc="Моменты сил, условия равновесия твердых тел." />
+                                <TopicCard color="blue" icon="ph-drop" title="Гидростатика" desc="Давление жидкостей, закон Архимеда, условия плавания тел." />
+                                <TopicCard color="blue" icon="ph-battery-charging" title="Законы сохранения" desc="Импульс, энергия, работа и мощность. Самый мощный инструмент решения задач." />
+                                <TopicCard color="blue" icon="ph-wave-sine" title="Механические колебания" desc="Пружинный и математический маятники, графики колебаний." />
+                            </div>
+                        </Section>
+
+                        {/* Раздел 2 */}
+                        <Section stepNumber="2" iconClass="ph ph-thermometer-hot" title="Раздел 2: Молекулярная физика и термодинамика" color="amber">
+                            <p className="mb-6 text-slate-600">Изучение макроскопических свойств тел через анализ микромира (молекул и атомов).</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <TopicCard color="amber" icon="ph-wind" title="Основы МКТ" desc="Идеальный газ, основное уравнение МКТ, изопроцессы (графики P, V, T)." />
+                                <TopicCard color="amber" icon="ph-cloud-rain" title="Влажность" desc="Насыщенный и ненасыщенный пар, относительная влажность, точка росы." />
+                                <TopicCard color="amber" icon="ph-fire" title="Термодинамика" desc="Первое начало термодинамики, работа газа, количество теплоты, тепловые двигатели (КПД)." />
+                            </div>
+                        </Section>
+
+                        {/* Раздел 3 */}
+                        <Section stepNumber="3" iconClass="ph ph-lightning" title="Раздел 3: Электродинамика" color="emerald">
+                            <p className="mb-6 text-slate-600">Наука об электромагнитном поле и его взаимодействии с зарядами. Требует хорошего пространственного воображения.</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <TopicCard color="emerald" icon="ph-sparkle" title="Электрическое поле" desc="Электростатика, закон Кулона, напряженность, потенциал." />
+                                <TopicCard color="emerald" icon="ph-plug" title="Постоянный ток и цепи" desc="Закон Ома, последовательное и параллельное соединение, работа тока." />
+                                <TopicCard color="emerald" icon="ph-stack-simple" title="Конденсаторы" desc="Емкость, энергия электрического поля, цепи с конденсаторами." />
+                                <TopicCard color="emerald" icon="ph-magnet" title="Магнетизм" desc="Магнитное поле, сила Ампера, сила Лоренца, правило левой руки." />
+                                <TopicCard color="emerald" icon="ph-coils" title="Электромагнитная индукция" desc="Закон Фарадея, правило Ленца, самоиндукция." />
+                                <TopicCard color="emerald" icon="ph-activity" title="Колебательный контур" desc="Электромагнитные колебания и переменный ток." />
+                                <TopicCard color="emerald" icon="ph-eyeglasses" title="Оптика" desc="Геометрическая (линзы, зеркала) и волновая (интерференция, дифракция) оптика." />
+                            </div>
+                        </Section>
+
+                        {/* Раздел 4 */}
+                        <Section stepNumber="4" iconClass="ph ph-atom" title="Раздел 4: Квантовая и ядерная физика" color="purple">
+                            <p className="mb-6 text-slate-600">Современная физика. Небольшой по объему, но очень «дорогой» в баллах раздел.</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <TopicCard color="purple" icon="ph-shooting-star" title="Квантовая физика" desc="Уравнение Эйнштейна для фотоэффекта, импульс фотона, давление света." />
+                                <TopicCard color="purple" icon="ph-radioactive" title="Ядерная физика" desc="Альфа-, бета-, гамма-распады, ядерные реакции, дефект масс." />
+                            </div>
+                        </Section>
+
+                        {/* Интерактивный блок выбора */}
+                        <div className="mt-16 pt-12 border-t-2 border-slate-200 fade-in relative">
+                            <div className="absolute left-1/2 -top-5 transform -translate-x-1/2 bg-slate-50 px-4 text-slate-400">
+                                <i className="ph ph-flag-checkered text-3xl"></i>
+                            </div>
+                            
+                            <h2 className="text-3xl font-bold text-center text-slate-800 mb-4">Что обсуждаем дальше?</h2>
+                            <p className="text-center text-slate-600 mb-10 max-w-2xl mx-auto">
+                                Чтобы этот маршрут привел к максимальному баллу, нужно правильно выстроить процесс прохождения каждой темы. Выберите аспект, который мы разберем следующим:
+                            </p>
+
+                            <div className="grid md:grid-cols-3 gap-6">
+                                <ActionChoice 
+                                    icon="ph-crosshair" 
+                                    title="Стратегия практики" 
+                                    desc="Как эффективно совмещать изучение теории с решением задач первой и второй части из открытого банка ФИПИ." 
+                                />
+                                <ActionChoice 
+                                    icon="ph-pen-nib" 
+                                    title="Алгоритм оформления" 
+                                    desc="Как правильно подходить к сложным расчетным задачам и задачам с обоснованием (например, 26 номеру по механике)." 
+                                />
+                                <ActionChoice 
+                                    icon="ph-arrows-clockwise" 
+                                    title="Организация повторения" 
+                                    desc="Как не забыть кинематику и динамику, пока с головой погружен в электродинамику и квантовую физику." 
+                                />
+                            </div>
+                        </div>
+
+                    </main>
+                    
+                    <footer className="bg-slate-900 text-slate-400 py-10 text-center text-sm mt-12">
+                        <p className="flex items-center justify-center gap-2">
+                            <i className="ph ph-graduation-cap text-xl text-amber-400"></i>
+                            Ваш персональный путеводитель по подготовке к ЕГЭ
+                        </p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

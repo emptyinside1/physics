@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Интерактивная Динамика</title>
+    
+    <!-- Подключаем стили Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Подключаем иконки Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Подключаем React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Подключаем Babel для компиляции JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Паттерн для фона-сетки */
+        .bg-grid-pattern {
+            background-image: linear-gradient(to right, #e2e8f0 1px, transparent 1px),
+                              linear-gradient(to bottom, #e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans selection:bg-rose-200">
+    
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // --- Вспомогательные компоненты ---
+        const Fraction = ({ top, bottom }) => (
+            <span className="inline-flex flex-col items-center justify-center align-middle mx-1">
+                <span className="border-b border-current pb-0.5 px-1 leading-none">{top}</span>
+                <span className="pt-0.5 px-1 leading-none">{bottom}</span>
+            </span>
+        );
+
+        const Formula = ({ children, title }) => (
+            <div className="my-4 overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-xl w-full max-w-2xl mx-auto">
+                {title && <div className="bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">{title}</div>}
+                <div className="p-4 text-center font-mono text-lg text-rose-300 flex flex-wrap items-center justify-center gap-2 overflow-x-auto">
+                    {children}
+                </div>
+            </div>
+        );
+
+        const Section = ({ iconClass, title, children, color = "rose" }) => {
+            const colorMap = {
+                blue: "text-blue-500 bg-blue-50 border-blue-100",
+                emerald: "text-emerald-500 bg-emerald-50 border-emerald-100",
+                amber: "text-amber-500 bg-amber-50 border-amber-100",
+                rose: "text-rose-500 bg-rose-50 border-rose-100",
+                indigo: "text-indigo-500 bg-indigo-50 border-indigo-100",
+                purple: "text-purple-500 bg-purple-50 border-purple-100",
+                slate: "text-slate-600 bg-slate-50 border-slate-200",
+            };
+
+            const headerBg = colorMap[color].replace('text-', 'bg-').replace('50', '50/50').replace('bg-', '');
+
+            return (
+                <section className="mb-12 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className={`p-6 border-b flex items-center gap-4 ${headerBg}`}>
+                        <div className={`p-3 rounded-xl bg-white shadow-sm flex items-center justify-center ${colorMap[color].split(' ')[0]}`}>
+                            <i className={`${iconClass} text-2xl font-bold`}></i>
+                        </div>
+                        <h2 className="text-2xl font-bold text-slate-800">{title}</h2>
+                    </div>
+                    <div className="p-6 text-slate-600 leading-relaxed text-lg">
+                        {children}
+                    </div>
+                </section>
+            );
+        };
+
+        const ExampleCard = ({ title, iconClass = "ph-target", condition, analysis, defaultOpen = false, color = "rose" }) => {
+            const [isOpen, setIsOpen] = useState(defaultOpen);
+
+            return (
+                <div className="border border-slate-200 rounded-xl overflow-hidden mb-6 shadow-sm bg-white">
+                    <div className="p-5 border-b border-slate-100 bg-slate-50">
+                        <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                            <i className={`ph ${iconClass} text-${color}-500 text-xl`}></i>
+                            {title}
+                        </h3>
+                        <div className="text-slate-600 text-sm space-y-2">{condition}</div>
+                    </div>
+                    <button 
+                        onClick={() => setIsOpen(!isOpen)}
+                        className={`w-full p-3 bg-${color}-50 text-${color}-700 font-semibold flex items-center justify-center gap-2 hover:bg-${color}-100 transition-colors focus:outline-none`}
+                    >
+                        {isOpen ? 
+                            <><i className="ph ph-caret-up text-lg"></i> Скрыть разбор</> : 
+                            <><i className="ph ph-caret-down text-lg"></i> Показать разбор</>
+                        }
+                    </button>
+                    {isOpen && (
+                        <div className={`p-5 bg-${color}-50/30 text-slate-700 fade-in border-t border-${color}-100`}>
+                            <div className="font-semibold text-slate-800 mb-3 text-lg border-b pb-2">Решение:</div>
+                            <div className="space-y-4 text-sm leading-relaxed">{analysis}</div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const SvgDefs = () => (
+            <svg width="0" height="0" className="absolute">
+                <defs>
+                    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+                    </marker>
+                    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+                    </marker>
+                    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+                    </marker>
+                    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
+                    </marker>
+                    <marker id="arrow-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+                    </marker>
+                    <marker id="arrow-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#f43f5e" />
+                    </marker>
+                    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7" />
+                    </marker>
+                </defs>
+            </svg>
+        );
+
+        function App() {
+            return (
+                <div className="min-h-screen">
+                    <SvgDefs />
+                    
+                    {/* Header */}
+                    <header className="bg-slate-900 text-white overflow-hidden relative">
+                        <div className="absolute inset-0 opacity-20">
+                            <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5"/>
+                                    </pattern>
+                                </defs>
+                                <rect width="100%" height="100%" fill="url(#grid)" />
+                            </svg>
+                        </div>
+                        <div className="max-w-4xl mx-auto px-6 py-20 relative z-10 text-center">
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-rose-500/20 text-rose-300 font-semibold mb-6 border border-rose-500/30 shadow-inner">
+                                <i className="ph ph-atom text-xl"></i> Причины движения
+                            </div>
+                            <h1 className="text-5xl md:text-6xl font-extrabold mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-rose-400 via-purple-400 to-amber-400">
+                                Динамика в деталях
+                            </h1>
+                            <p className="text-xl text-slate-300 max-w-2xl mx-auto">
+                                Раздел механики, изучающий причины возникновения движения. В отличие от кинематики, мы отвечаем на вопрос <strong>«почему тело так движется?»</strong>.
+                            </p>
+                        </div>
+                    </header>
+
+                    <main className="max-w-4xl mx-auto px-6 py-12">
+                        
+                        {/* 1. Суть явления */}
+                        <Section iconClass="ph ph-apple-logo" title="1. Законы Ньютона и Силы" color="rose">
+                            <p className="mb-6">Основой классической динамики являются три легендарных закона сэра Исаака Ньютона.</p>
+                            
+                            <div className="grid md:grid-cols-3 gap-4 mb-8">
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm">
+                                    <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl mb-3 shadow-inner border border-blue-200">1</div>
+                                    <h4 className="font-bold text-slate-800 mb-2">Закон инерции</h4>
+                                    <p className="text-sm text-slate-600 mb-3">Существуют инерциальные системы отсчета, где тело покоится или движется равномерно, если силы скомпенсированы.</p>
+                                    <div className="font-mono text-xs bg-white border p-2 rounded text-center text-blue-700">ΣF⃗ = 0  ⇒  a⃗ = 0</div>
+                                </div>
+                                
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm ring-2 ring-rose-400">
+                                    <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center font-bold text-xl mb-3 shadow-inner border border-rose-200">2</div>
+                                    <h4 className="font-bold text-slate-800 mb-2">Основной закон</h4>
+                                    <p className="text-sm text-slate-600 mb-3">Ускорение тела прямо пропорционально равнодействующей всех сил и обратно пропорционально массе.</p>
+                                    <div className="font-mono text-xs bg-white border p-2 rounded text-center font-bold text-rose-700">ΣF⃗ = m·a⃗</div>
+                                </div>
+
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm">
+                                    <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center font-bold text-xl mb-3 shadow-inner border border-emerald-200">3</div>
+                                    <h4 className="font-bold text-slate-800 mb-2">Действие и противодействие</h4>
+                                    <p className="text-sm text-slate-600 mb-3">Тела действуют друг на друга с силами, равными по модулю и противоположными по направлению.</p>
+                                    <div className="font-mono text-xs bg-white border p-2 rounded text-center text-emerald-700">F⃗₁₂ = -F⃗₂₁</div>
+                                </div>
+                            </div>
+
+                            <h4 className="font-bold text-xl text-slate-800 mb-4 border-b pb-2">Основные силы в механике</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                <div className="flex items-center gap-3 p-3 bg-white border rounded-lg shadow-sm">
+                                    <div className="w-2 h-8 bg-red-500 rounded-full"></div>
+                                    <div>
+                                        <div className="font-bold text-slate-800 text-sm">Сила тяжести (mg)</div>
+                                        <div className="text-xs text-slate-500">Притяжение к Земле. Всегда строго вниз.</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-white border rounded-lg shadow-sm">
+                                    <div className="w-2 h-8 bg-blue-500 rounded-full"></div>
+                                    <div>
+                                        <div className="font-bold text-slate-800 text-sm">Реакция опоры (N)</div>
+                                        <div className="text-xs text-slate-500">Давление на поверхность. Перпендикулярно ей.</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-white border rounded-lg shadow-sm">
+                                    <div className="w-2 h-8 bg-emerald-500 rounded-full"></div>
+                                    <div>
+                                        <div className="font-bold text-slate-800 text-sm">Сила трения (Fтр)</div>
+                                        <div className="text-xs text-slate-500">Против движения (или возможного движения).</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-white border rounded-lg shadow-sm">
+                                    <div className="w-2 h-8 bg-purple-500 rounded-full"></div>
+                                    <div>
+                                        <div className="font-bold text-slate-800 text-sm">Натяжение / Упругость (T / Fупр)</div>
+                                        <div className="text-xs text-slate-500">Вдоль нити от тела / против деформации.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 shadow-sm">
+                                <h4 className="font-bold text-amber-900 mb-3 flex items-center gap-2"><i className="ph ph-circle"></i> Блоки</h4>
+                                <ul className="list-disc pl-5 text-sm text-amber-800 space-y-2">
+                                    <li><strong>Неподвижный блок:</strong> Ось закреплена. Не дает выигрыша в силе, меняет направление.</li>
+                                    <li><strong>Подвижный блок:</strong> Ось движется. Дает выигрыш в силе в 2 раза, но проигрыш в расстоянии в 2 раза ("золотое правило механики").</li>
+                                </ul>
+                            </div>
+                        </Section>
+
+                        {/* 2. Визуализация */}
+                        <Section iconClass="ph ph-magic-wand" title="2. Визуализация: Система связанных тел" color="purple">
+                            <p className="mb-4">
+                                Рассмотрим классическую динамическую систему (Машину Атвуда). Легкий груз m₁ поднимается вверх, тяжелый m₂ опускается вниз. Нить нерастяжима, поэтому <strong>ускорения равны по модулю</strong>.
+                            </p>
+                            
+                            <div className="bg-slate-100 border border-slate-300 rounded-2xl overflow-hidden relative shadow-inner mb-4 flex justify-center py-6">
+                                <svg viewBox="0 0 400 350" className="w-full max-w-sm drop-shadow-md">
+                                    {/* Ceiling */}
+                                    <line x1="100" y1="20" x2="300" y2="20" stroke="#64748b" strokeWidth="6" strokeLinecap="round" />
+                                    <path d="M 120 20 L 110 10 M 160 20 L 150 10 M 200 20 L 190 10 M 240 20 L 230 10 M 280 20 L 270 10" stroke="#cbd5e1" strokeWidth="2" />
+
+                                    {/* Pulley Support */}
+                                    <line x1="200" y1="20" x2="200" y2="80" stroke="#94a3b8" strokeWidth="4" />
+                                    
+                                    {/* Pulley */}
+                                    <circle cx="200" cy="80" r="30" fill="#e2e8f0" stroke="#64748b" strokeWidth="4" />
+                                    <circle cx="200" cy="80" r="5" fill="#334155" />
+
+                                    {/* Dynamic Elements (Group with animation logic represented structurally) */}
+                                    
+                                    {/* Rope Left (m1) */}
+                                    <line x1="170" y1="80" x2="170" y2="180" stroke="#94a3b8" strokeWidth="3">
+                                        <animate attributeName="y2" values="220;140;220" dur="4s" repeatCount="indefinite" />
+                                    </line>
+                                    
+                                    {/* Rope Right (m2) */}
+                                    <line x1="230" y1="80" x2="230" y2="220" stroke="#94a3b8" strokeWidth="3">
+                                        <animate attributeName="y2" values="140;220;140" dur="4s" repeatCount="indefinite" />
+                                    </line>
+
+                                    {/* Block m1 (Left - Lighter) */}
+                                    <g>
+                                        <animateTransform attributeName="transform" type="translate" values="0 40; 0 -40; 0 40" dur="4s" repeatCount="indefinite" />
+                                        <rect x="150" y="180" width="40" height="40" fill="#38bdf8" rx="4" />
+                                        <text x="170" y="205" fill="white" fontSize="14" fontWeight="bold" textAnchor="middle">m₁</text>
+                                        {/* T (up) */}
+                                        <line x1="170" y1="180" x2="170" y2="130" stroke="#a855f7" strokeWidth="3" markerEnd="url(#arrow-purple)" />
+                                        <text x="150" y="140" fill="#a855f7" fontSize="14" fontWeight="bold">T</text>
+                                        {/* m1g (down) */}
+                                        <line x1="170" y1="220" x2="170" y2="260" stroke="#ef4444" strokeWidth="3" markerEnd="url(#arrow-red)" />
+                                        <text x="150" y="275" fill="#ef4444" fontSize="14" fontWeight="bold">m₁g</text>
+                                        {/* Acceleration a (up) */}
+                                        <line x1="130" y1="200" x2="130" y2="160" stroke="#f59e0b" strokeWidth="3" markerEnd="url(#arrow-amber)" />
+                                        <text x="110" y="180" fill="#f59e0b" fontSize="16" fontWeight="bold">a</text>
+                                    </g>
+
+                                    {/* Block m2 (Right - Heavier) */}
+                                    <g>
+                                        <animateTransform attributeName="transform" type="translate" values="0 -40; 0 40; 0 -40" dur="4s" repeatCount="indefinite" />
+                                        <rect x="205" y="220" width="50" height="60" fill="#0284c7" rx="4" />
+                                        <text x="230" y="255" fill="white" fontSize="14" fontWeight="bold" textAnchor="middle">m₂</text>
+                                        {/* T (up - same length as m1's T) */}
+                                        <line x1="230" y1="220" x2="230" y2="170" stroke="#a855f7" strokeWidth="3" markerEnd="url(#arrow-purple)" />
+                                        <text x="245" y="180" fill="#a855f7" fontSize="14" fontWeight="bold">T</text>
+                                        {/* m2g (down - longer than m1g) */}
+                                        <line x1="230" y1="280" x2="230" y2="340" stroke="#ef4444" strokeWidth="4" markerEnd="url(#arrow-red)" />
+                                        <text x="245" y="330" fill="#ef4444" fontSize="14" fontWeight="bold">m₂g</text>
+                                        {/* Acceleration a (down) */}
+                                        <line x1="270" y1="230" x2="270" y2="270" stroke="#f59e0b" strokeWidth="3" markerEnd="url(#arrow-amber)" />
+                                        <text x="285" y="260" fill="#f59e0b" fontSize="16" fontWeight="bold">a</text>
+                                    </g>
+                                </svg>
+                            </div>
+                        </Section>
+
+                        {/* 3. Формулы */}
+                        <Section iconClass="ph ph-sigma" title="3. Формулы и математика" color="blue">
+                            
+                            <div className="grid md:grid-cols-2 gap-4 mb-6">
+                                <Formula title="Второй закон Ньютона">
+                                    <span>F⃗<sub>res</sub> = Σ F⃗<sub>i</sub> = m·a⃗</span>
+                                </Formula>
+                                <Formula title="Сила тяжести">
+                                    <span>F<sub>т</sub> = mg</span>
+                                </Formula>
+                                <Formula title="Сила трения скольжения">
+                                    <span>F<sub>тр</sub> = μN</span>
+                                </Formula>
+                                <Formula title="Сила упругости (з. Гука)">
+                                    <span>F<sub>упр</sub> = k·|Δx|</span>
+                                </Formula>
+                            </div>
+
+                            <div className="bg-slate-50 border rounded-xl p-5">
+                                <h4 className="font-bold text-slate-700 uppercase text-xs tracking-wider mb-3">Расшифровка переменных (СИ):</h4>
+                                <ul className="grid md:grid-cols-2 gap-2 text-sm text-slate-600 font-mono">
+                                    <li><b>F<sub>res</sub></b> — равнодействующая сила (Н)</li>
+                                    <li><b>m</b> — масса тела (кг)</li>
+                                    <li><b>a⃗</b> — ускорение (м/с²)</li>
+                                    <li><b>g</b> — ускор. свобод. падения (≈10 м/с²)</li>
+                                    <li><b>μ</b> — коэфф. трения (безразмерно)</li>
+                                    <li><b>N</b> — реакция опоры (Н)</li>
+                                    <li><b>k</b> — жесткость пружины (Н/м)</li>
+                                    <li><b>Δx</b> — удлинение пружины (м)</li>
+                                </ul>
+                            </div>
+                        </Section>
+
+                        {/* 4. Алгоритм */}
+                        <Section iconClass="ph ph-list-checks" title="4. Стандартный алгоритм решения" color="emerald">
+                            <p className="mb-6">Этот алгоритм — ваш лучший друг. 95% школьных задач по динамике решаются строго по этим шагам:</p>
+                            
+                            <div className="space-y-3 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-emerald-300 before:to-transparent">
+                                
+                                {[
+                                    { title: "Анализ условия", desc: "Кратко запишите «Дано» и «Найти»." },
+                                    { title: "Рисунок", desc: "Сделайте схематичный чертеж системы тел." },
+                                    { title: "Расстановка сил", desc: "Изобразите векторы всех сил, действующих на каждое тело отдельно. Обязательно покажите вектор ускорения." },
+                                    { title: "Выбор осей", desc: "Удобнее всего одну из осей направлять сонаправленно с вектором ускорения." },
+                                    { title: "Второй закон Ньютона", desc: "Запишите закон в векторном виде: ΣF⃗ = ma⃗." },
+                                    { title: "Проецирование", desc: "Спроецируйте векторы на оси. Сонаправлен оси = '+', в противоположную = '-', перпендикулярен = '0'." },
+                                    { title: "Решение системы", desc: "Добавьте формулы (Fтр = μN). Решите алгебраическую систему." }
+                                ].map((step, idx) => (
+                                    <div key={idx} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                                        <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-emerald-100 text-emerald-600 font-bold shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                                            {idx + 1}
+                                        </div>
+                                        <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                            <h5 className="font-bold text-slate-800">{step.title}</h5>
+                                            <p className="text-sm text-slate-600">{step.desc}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </Section>
+
+                        {/* 5. Разбор примера */}
+                        <Section iconClass="ph ph-chalkboard-teacher" title="5. Разбор примера: Машина Атвуда" color="amber">
+                            <ExampleCard 
+                                defaultOpen={true}
+                                title="Грузы на блоке"
+                                iconClass="ph-scales"
+                                color="amber"
+                                condition={
+                                    <>
+                                        <p>Два груза массами <strong>m₁ = 2 кг</strong> и <strong>m₂ = 3 кг</strong> соединены невесомой и нерастяжимой нитью, перекинутой через идеальный неподвижный блок. Найдите ускорение, с которым будут двигаться грузы. (g = 10 м/с²).</p>
+                                    </>
+                                }
+                                analysis={
+                                    <div className="space-y-4">
+                                        <p><strong>1. Анализ сил:</strong> Более тяжелый груз (m₂) движется с ускорением вниз, легкий (m₁) — вверх. Нить невесома и нерастяжима, поэтому сила натяжения <strong>T</strong> и ускорение <strong>a</strong> для обоих грузов одинаковы.</p>
+                                        
+                                        <p><strong>2. Запись уравнений (ось Y направим вверх):</strong></p>
+                                        <div className="bg-amber-50 p-4 rounded border border-amber-200 font-mono text-sm space-y-2">
+                                            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Для m₁ (ускорение a направлено <b>вверх</b>, как и ось):<br/><span className="pl-4 font-bold text-amber-900">T - m₁g = m₁a</span></div>
+                                            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Для m₂ (ускорение a направлено <b>вниз</b>, против оси):<br/><span className="pl-4 font-bold text-amber-900">T - m₂g = -m₂a</span> &nbsp;&nbsp;(или m₂g - T = m₂a)</div>
+                                        </div>
+
+                                        <p><strong>3. Решение системы:</strong></p>
+                                        <p className="text-sm">Сложим уравнения: (T - m₁g) + (m₂g - T) = m₁a + m₂a</p>
+                                        <div className="bg-amber-50 p-4 rounded border border-amber-200 font-mono text-center font-bold text-amber-900 shadow-inner text-lg">
+                                            g(m₂ - m₁) = a(m₁ + m₂)<br/>
+                                            a = g · <Fraction top="m₂ - m₁" bottom="m₁ + m₂" />
+                                        </div>
+
+                                        <p><strong>4. Вычисления:</strong></p>
+                                        <div className="font-mono bg-white p-2 rounded border inline-block">
+                                            a = 10 · (3 - 2) / (2 + 3) = 10 · (1 / 5) = <span className="text-rose-600 font-bold">2 м/с²</span>
+                                        </div>
+                                    </div>
+                                }
+                            />
+                        </Section>
+
+                        {/* 6. Проверочная задача */}
+                        <Section iconClass="ph ph-exam" title="6. Проверочная задача" color="rose">
+                            <p className="mb-4">Попробуйте решить самостоятельно. Все необходимые силы вы найдете на чертеже в подсказке!</p>
+                            
+                            <ExampleCard 
+                                title="Брусок с пружиной"
+                                iconClass="ph-exam"
+                                color="rose"
+                                condition={
+                                    <>
+                                        <p>Брусок массой <strong>m = 4 кг</strong> тянут по горизонтальной шероховатой поверхности с помощью горизонтально расположенной пружины жесткостью <strong>k = 100 Н/м</strong>. Коэффициент трения скольжения равен <strong>μ = 0,2</strong>. Пружина стабильно растянута на <strong>Δx = 0,1 м</strong>.</p>
+                                        <p className="mt-2 text-slate-800 font-semibold">С каким ускорением движется брусок? (g = 10 м/с²).</p>
+                                        
+                                        {/* Схема-подсказка */}
+                                        <div className="mt-6 border p-4 bg-white rounded-xl text-center">
+                                            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Схема сил</div>
+                                            <svg viewBox="-50 0 500 200" className="w-full max-w-md mx-auto">
+                                                {/* Surface */}
+                                                <line x1="-50" y1="150" x2="450" y2="150" stroke="#94a3b8" strokeWidth="4" />
+                                                <path d="M -40 150 L -50 160 M 0 150 L -10 160 M 40 150 L 30 160 M 80 150 L 70 160 M 120 150 L 110 160 M 160 150 L 150 160 M 200 150 L 190 160 M 240 150 L 230 160 M 280 150 L 270 160 M 320 150 L 310 160 M 360 150 L 350 160 M 400 150 L 390 160 M 440 150 L 430 160" stroke="#cbd5e1" strokeWidth="2" />
+
+                                                {/* Block */}
+                                                <rect x="150" y="90" width="100" height="60" fill="#f43f5e" rx="4" opacity="0.9" />
+                                                <text x="200" y="125" fill="white" fontSize="16" fontWeight="bold" textAnchor="middle">m</text>
+                                                <circle cx="200" cy="120" r="4" fill="#1e293b" />
+
+                                                {/* Spring */}
+                                                <path d="M 250 120 L 270 120 L 275 110 L 285 130 L 295 110 L 305 130 L 315 110 L 325 130 L 335 110 L 340 120 L 380 120" fill="none" stroke="#64748b" strokeWidth="3" />
+                                                <line x1="380" y1="100" x2="380" y2="140" stroke="#64748b" strokeWidth="4" /> {/* Pulling hand abstract */}
+
+                                                {/* Forces */}
+                                                {/* N */}
+                                                <line x1="200" y1="90" x2="200" y2="20" stroke="#3b82f6" strokeWidth="3" markerEnd="url(#arrow-blue)" />
+                                                <text x="210" y="30" fill="#3b82f6" fontSize="16" fontWeight="bold">N</text>
+
+                                                {/* mg */}
+                                                <line x1="200" y1="120" x2="200" y2="190" stroke="#ef4444" strokeWidth="3" markerEnd="url(#arrow-red)" />
+                                                <text x="210" y="185" fill="#ef4444" fontSize="16" fontWeight="bold">mg</text>
+
+                                                {/* F_upr */}
+                                                <line x1="250" y1="120" x2="330" y2="120" stroke="#a855f7" strokeWidth="3" markerEnd="url(#arrow-purple)" />
+                                                <text x="260" y="105" fill="#a855f7" fontSize="16" fontWeight="bold">Fупр</text>
+
+                                                {/* F_tr */}
+                                                <line x1="150" y1="150" x2="70" y2="150" stroke="#10b981" strokeWidth="3" markerEnd="url(#arrow-emerald)" />
+                                                <text x="90" y="140" fill="#10b981" fontSize="16" fontWeight="bold">Fтр</text>
+
+                                                {/* Acceleration */}
+                                                <line x1="180" y1="60" x2="240" y2="60" stroke="#f59e0b" strokeWidth="4" markerEnd="url(#arrow-amber)" />
+                                                <text x="205" y="50" fill="#f59e0b" fontSize="18" fontWeight="bold">a</text>
+                                            </svg>
+                                        </div>
+                                    </>
+                                }
+                                analysis={
+                                    <div className="space-y-4 text-rose-900">
+                                        <p><strong>1. Запишем Второй закон Ньютона в проекциях:</strong></p>
+                                        <div className="bg-white p-3 rounded border font-mono text-sm space-y-2">
+                                            <div>Ось Y: <span className="font-bold">N - mg = 0</span>  ⇒  <span className="text-blue-600">N = mg</span></div>
+                                            <div>Ось X: <span className="font-bold">F<sub>упр</sub> - F<sub>тр</sub> = ma</span></div>
+                                        </div>
+
+                                        <p><strong>2. Подставим формулы конкретных сил:</strong></p>
+                                        <ul className="list-disc pl-5 space-y-1 text-sm bg-white p-3 rounded border">
+                                            <li>Сила трения: <span className="font-mono font-bold text-emerald-700">F<sub>тр</sub> = μN = μmg</span></li>
+                                            <li>Сила упругости: <span className="font-mono font-bold text-purple-700">F<sub>упр</sub> = kΔx</span></li>
+                                        </ul>
+                                        
+                                        <p><strong>3. Соберем итоговое уравнение:</strong></p>
+                                        <div className="font-mono bg-rose-100 p-3 rounded font-bold text-center border border-rose-200 shadow-inner text-lg">
+                                            kΔx - μmg = ma<br/>
+                                            a = <Fraction top="kΔx - μmg" bottom="m" />
+                                        </div>
+
+                                        <p><strong>4. Произведем вычисления:</strong></p>
+                                        <div className="font-mono bg-white p-3 rounded border text-sm space-y-1">
+                                            <div>• F<sub>упр</sub> = 100 · 0.1 = 10 Н</div>
+                                            <div>• F<sub>тр</sub> = 0.2 · 4 · 10 = 8 Н</div>
+                                            <div>• 10 - 8 = 4 · a</div>
+                                            <div>• 2 = 4a  ⇒  <span className="text-rose-600 font-bold text-lg">a = 0.5 м/с²</span></div>
+                                        </div>
+
+                                        <div className="bg-rose-800 text-rose-100 p-4 rounded-lg mt-4 text-center font-bold shadow-md text-lg">
+                                            Ответ: Ускорение бруска a = 0.5 м/с².
+                                        </div>
+                                    </div>
+                                }
+                            />
+                        </Section>
+
+                    </main>
+                    
+                    <footer className="bg-slate-900 text-slate-400 py-10 text-center text-sm border-t-4 border-rose-500">
+                        <p className="flex items-center justify-center gap-2">
+                            <i className="ph ph-rocket-launch text-xl text-rose-400"></i>
+                            Интерактивный гид по физике. Да пребудет с вами Сила! (F = ma)
+                        </p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

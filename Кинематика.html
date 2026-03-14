@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Интерактивная Кинематика</title>
+    
+    <!-- Подключаем стили Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Подключаем иконки Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Подключаем React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Подключаем Babel для компиляции JSX прямо в браузере -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Небольшая настройка для плавности анимаций хвоста */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans selection:bg-blue-200">
+    
+    <!-- Здесь будет отрендерен наш React-компонент -->
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // --- Вспомогательные компоненты ---
+
+        const Fraction = ({ top, bottom }) => (
+            <span className="inline-flex flex-col items-center justify-center align-middle mx-1">
+                <span className="border-b border-current pb-0.5 px-1 leading-none">{top}</span>
+                <span className="pt-0.5 px-1 leading-none">{bottom}</span>
+            </span>
+        );
+
+        const Formula = ({ children, title }) => (
+            <div className="my-4 overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-xl">
+                {title && <div className="bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{title}</div>}
+                <div className="p-4 text-center font-mono text-lg text-emerald-300 flex flex-wrap items-center justify-center gap-2 overflow-x-auto">
+                    {children}
+                </div>
+            </div>
+        );
+
+        const Section = ({ iconClass, title, children, color = "blue" }) => {
+            const colorMap = {
+                blue: "text-blue-500 bg-blue-50 border-blue-100",
+                emerald: "text-emerald-500 bg-emerald-50 border-emerald-100",
+                amber: "text-amber-500 bg-amber-50 border-amber-100",
+                rose: "text-rose-500 bg-rose-50 border-rose-100",
+                indigo: "text-indigo-500 bg-indigo-50 border-indigo-100",
+                purple: "text-purple-500 bg-purple-50 border-purple-100",
+            };
+
+            const headerBg = colorMap[color].replace('text-', 'bg-').replace('50', '50/50').replace('bg-', '');
+
+            return (
+                <section className="mb-12 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className={`p-6 border-b flex items-center gap-4 ${headerBg}`}>
+                        <div className={`p-3 rounded-xl bg-white shadow-sm flex items-center justify-center ${colorMap[color].split(' ')[0]}`}>
+                            <i className={`${iconClass} text-2xl font-bold`}></i>
+                        </div>
+                        <h2 className="text-2xl font-bold text-slate-800">{title}</h2>
+                    </div>
+                    <div className="p-6 text-slate-600 leading-relaxed text-lg">
+                        {children}
+                    </div>
+                </section>
+            );
+        };
+
+        const ExampleCard = ({ title, condition, analysis }) => {
+            const [isOpen, setIsOpen] = useState(false);
+
+            return (
+                <div className="border border-slate-200 rounded-xl overflow-hidden mb-6 shadow-sm bg-white">
+                    <div className="p-5 border-b border-slate-100 bg-slate-50">
+                        <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                            <i className="ph ph-target text-blue-500 text-xl"></i>
+                            {title}
+                        </h3>
+                        <p className="text-slate-600">{condition}</p>
+                    </div>
+                    <button 
+                        onClick={() => setIsOpen(!isOpen)}
+                        className="w-full p-3 bg-blue-50 text-blue-700 font-semibold flex items-center justify-center gap-2 hover:bg-blue-100 transition-colors focus:outline-none"
+                    >
+                        {isOpen ? 
+                            <><i className="ph ph-caret-up text-lg"></i> Скрыть решение</> : 
+                            <><i className="ph ph-caret-down text-lg"></i> Показать решение</>
+                        }
+                    </button>
+                    {isOpen && (
+                        <div className="p-5 bg-blue-50/30 text-slate-700 fade-in">
+                            <div className="font-semibold text-slate-800 mb-2">Анализ и решение:</div>
+                            <div className="space-y-2">{analysis}</div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- SVG Маркеры (стрелочки для графиков) ---
+        const SvgDefs = () => (
+            <svg width="0" height="0" className="absolute">
+                <defs>
+                    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+                    </marker>
+                    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+                    </marker>
+                    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+                    </marker>
+                    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
+                    </marker>
+                    <marker id="arrow-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+                    </marker>
+                </defs>
+            </svg>
+        );
+
+        // --- Главное приложение ---
+        function App() {
+            return (
+                <div className="min-h-screen">
+                    <SvgDefs />
+                    
+                    {/* Header */}
+                    <header className="bg-slate-900 text-white overflow-hidden relative">
+                        <div className="absolute inset-0 opacity-20">
+                            <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5"/>
+                                    </pattern>
+                                </defs>
+                                <rect width="100%" height="100%" fill="url(#grid)" />
+                            </svg>
+                        </div>
+                        <div className="max-w-4xl mx-auto px-6 py-20 relative z-10 text-center">
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/20 text-blue-300 font-semibold mb-6 border border-blue-500/30">
+                                <i className="ph ph-activity text-xl"></i> Визуальный конспект
+                            </div>
+                            <h1 className="text-5xl md:text-6xl font-extrabold mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                                Кинематика в деталях
+                            </h1>
+                            <p className="text-xl text-slate-300 max-w-2xl mx-auto">
+                                Раздел механики, который отвечает на вопрос «как движется тело?». Нас интересуют только координаты, время, скорость и ускорение. Разберем все: от фундамента до сложных задач.
+                            </p>
+                        </div>
+                    </header>
+
+                    <main className="max-w-4xl mx-auto px-6 py-12">
+                        
+                        {/* 1. Фундаментальные понятия */}
+                        <Section iconClass="ph ph-book-open" title="1. Фундаментальные понятия" color="blue">
+                            <p className="mb-6">Прежде чем писать формулы, нужно ввести базовые термины, на которых строится вся физика движения.</p>
+                            
+                            <div className="grid md:grid-cols-2 gap-6 mb-8">
+                                <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+                                    <h4 className="font-bold text-slate-800 mb-2">Материальная точка</h4>
+                                    <p className="text-sm">Это модель. Тело, размерами которого можно пренебречь. Поезд из Москвы во Владивосток — да. Тот же поезд, проезжающий мимо платформы — нет.</p>
+                                </div>
+                                <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+                                    <h4 className="font-bold text-slate-800 mb-2">Траектория</h4>
+                                    <p className="text-sm">Воображаемая линия в пространстве, по которой двигалось тело.</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-white border rounded-2xl overflow-hidden shadow-sm flex flex-col md:flex-row items-center mb-6">
+                                <div className="p-6 md:w-1/2">
+                                    <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                                        Путь (S)
+                                    </h4>
+                                    <p className="text-sm mb-4">Длина траектории. Скалярная величина. Путь всегда только увеличивается или равен нулю, он не может быть отрицательным.</p>
+                                    
+                                    <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                        <div className="w-3 h-3 bg-red-500 transform rotate-45"></div>
+                                        Перемещение (S⃗)
+                                    </h4>
+                                    <p className="text-sm">Вектор, соединяющий начальную точку с конечной. Перемещение может быть равно нулю, даже если пройден огромный путь (например, погуляли и вернулись домой).</p>
+                                </div>
+                                <div className="md:w-1/2 p-6 bg-slate-50 border-l border-slate-100 flex justify-center items-center w-full">
+                                    <svg viewBox="0 0 300 200" className="w-full max-w-[250px] drop-shadow-md">
+                                        <path id="path-curve" d="M 40 160 C 90 20, 190 220, 260 60" fill="none" stroke="#3b82f6" strokeWidth="4" strokeLinecap="round" strokeDasharray="6,6" />
+                                        <line x1="40" y1="160" x2="255" y2="65" stroke="#ef4444" strokeWidth="4" markerEnd="url(#arrow-red)" />
+                                        <circle cx="40" cy="160" r="6" fill="#1e293b" />
+                                        <circle cx="260" cy="60" r="6" fill="#1e293b" />
+                                        <text x="30" y="185" fontSize="14" fontWeight="bold" fill="#1e293b">Старт</text>
+                                        <text x="240" y="45" fontSize="14" fontWeight="bold" fill="#1e293b">Финиш</text>
+                                        
+                                        <circle r="7" fill="#f59e0b">
+                                            <animateMotion dur="5s" repeatCount="indefinite" path="M 40 160 C 90 20, 190 220, 260 60" />
+                                        </circle>
+                                    </svg>
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* 2. Векторы и проекции */}
+                        <Section iconClass="ph ph-compass" title="2. Векторы и проекции" color="emerald">
+                            <p className="mb-6">В физике почти все величины — векторные. Чтобы превратить вектор в число, используют метод проекций.</p>
+                            
+                            <div className="flex flex-col md:flex-row gap-6 items-center bg-emerald-50/30 p-6 rounded-2xl border border-emerald-100">
+                                <div className="flex-1 space-y-4 text-sm w-full">
+                                    <div className="flex items-start gap-3">
+                                        <div className="mt-1 bg-emerald-100 text-emerald-600 p-1 rounded"><i className="ph ph-caret-up"></i></div>
+                                        <div><strong>Проекция положительна:</strong> Вектор направлен туда же, куда и ось.</div>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <div className="mt-1 bg-rose-100 text-rose-600 p-1 rounded"><i className="ph ph-caret-down"></i></div>
+                                        <div><strong>Проекция отрицательна:</strong> Вектор направлен в противоположную сторону.</div>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <div className="mt-1 bg-slate-200 text-slate-600 p-1 rounded"><i className="ph ph-circle-dashed"></i></div>
+                                        <div><strong>Проекция равна нулю:</strong> Вектор перпендикулярен оси (не влияет на движение вдоль нее).</div>
+                                    </div>
+                                </div>
+                                <div className="w-full md:w-64 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                    <svg viewBox="0 0 200 150" className="w-full">
+                                        <line x1="20" y1="120" x2="180" y2="120" stroke="#1e293b" strokeWidth="2" markerEnd="url(#arrow-slate)" />
+                                        <text x="175" y="140" fontSize="14" fontWeight="bold">X</text>
+                                        
+                                        <line x1="40" y1="80" x2="90" y2="40" stroke="#10b981" strokeWidth="3" markerEnd="url(#arrow-emerald)" />
+                                        <line x1="40" y1="80" x2="40" y2="120" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3" />
+                                        <line x1="90" y1="40" x2="90" y2="120" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3" />
+                                        <line x1="40" y1="120" x2="90" y2="120" stroke="#10b981" strokeWidth="4" />
+                                        <text x="55" y="115" fontSize="12" fill="#10b981" fontWeight="bold">+vₓ</text>
+
+                                        <line x1="160" y1="70" x2="130" y2="30" stroke="#ef4444" strokeWidth="3" markerEnd="url(#arrow-red)" />
+                                        <line x1="160" y1="70" x2="160" y2="120" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3" />
+                                        <line x1="130" y1="30" x2="130" y2="120" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3" />
+                                        <line x1="160" y1="120" x2="130" y2="120" stroke="#ef4444" strokeWidth="4" />
+                                        <text x="135" y="115" fontSize="12" fill="#ef4444" fontWeight="bold">-vₓ</text>
+                                    </svg>
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* 3. Главные величины */}
+                        <Section iconClass="ph ph-activity" title="3. Главные величины: Скорость и Ускорение" color="amber">
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-20"><i className="ph ph-activity text-6xl"></i></div>
+                                    <h3 className="text-2xl font-bold mb-2">Скорость (v⃗)</h3>
+                                    <p className="text-blue-100 mb-4">Показывает, как быстро меняется координата.</p>
+                                    <div className="inline-block bg-blue-900/50 px-3 py-1 rounded-lg font-mono text-lg font-bold">
+                                        [м/с]
+                                    </div>
+                                </div>
+                                
+                                <div className="bg-gradient-to-br from-rose-500 to-rose-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-20"><i className="ph ph-trend-up text-6xl"></i></div>
+                                    <h3 className="text-2xl font-bold mb-2">Ускорение (a⃗)</h3>
+                                    <p className="text-rose-100 mb-4">Показывает, как быстро меняется сама скорость.</p>
+                                    <div className="inline-block bg-rose-900/50 px-3 py-1 rounded-lg font-mono text-lg font-bold">
+                                        [м/с²]
+                                    </div>
+                                    <p className="mt-4 text-sm text-rose-100/80 italic">
+                                        Если a = 3 м/с², за каждую секунду скорость растет на 3 м/с.
+                                    </p>
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* 4. Равномерное движение */}
+                        <Section iconClass="ph ph-train" title="4. Равномерное прямолинейное движение" color="indigo">
+                            <p className="mb-4">Самое простое движение. Тело едет по прямой, его скорость постоянна (v = const), ускорения нет (a = 0).</p>
+                            
+                            <Formula title="Уравнение координаты">
+                                <span>x(t) = x<sub>0</sub> + v<sub>x</sub>t</span>
+                            </Formula>
+                            <p className="text-sm text-center text-slate-500 mb-8">Где x₀ — начальная координата, vₓ — проекция скорости на ось X, t — время.</p>
+
+                            <h4 className="font-bold text-slate-800 mb-4 text-center">Графики движения</h4>
+                            <div className="flex flex-col md:flex-row gap-8 justify-center items-center">
+                                <div className="w-full max-w-[250px]">
+                                    <div className="text-center font-bold text-slate-700 mb-2">x(t) - Координата</div>
+                                    <div className="bg-white border-2 border-slate-200 rounded-xl p-4 shadow-sm relative">
+                                        <svg viewBox="-20 -20 120 120" className="w-full">
+                                            <line x1="0" y1="100" x2="100" y2="100" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-slate)" />
+                                            <line x1="0" y1="100" x2="0" y2="0" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-slate)" />
+                                            <text x="95" y="115" fontSize="10">t</text>
+                                            <text x="-15" y="5" fontSize="10">x</text>
+                                            <path d="M 0 80 L 90 20" fill="none" stroke="#3b82f6" strokeWidth="3" />
+                                            <text x="-15" y="85" fontSize="10">x₀</text>
+                                        </svg>
+                                        <p className="text-xs text-center mt-2 text-slate-500">Прямая линия. Чем круче, тем больше скорость.</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="w-full max-w-[250px]">
+                                    <div className="text-center font-bold text-slate-700 mb-2">v(t) - Скорость</div>
+                                    <div className="bg-white border-2 border-slate-200 rounded-xl p-4 shadow-sm relative">
+                                        <svg viewBox="-20 -20 120 120" className="w-full">
+                                            <line x1="0" y1="100" x2="100" y2="100" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-slate)" />
+                                            <line x1="0" y1="100" x2="0" y2="0" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-slate)" />
+                                            <text x="95" y="115" fontSize="10">t</text>
+                                            <text x="-15" y="5" fontSize="10">v</text>
+                                            <path d="M 0 40 L 90 40" fill="none" stroke="#ef4444" strokeWidth="3" />
+                                            <text x="-15" y="45" fontSize="10">vₓ</text>
+                                        </svg>
+                                        <p className="text-xs text-center mt-2 text-slate-500">Горизонтальная линия (v = const).</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* 5. Равноускоренное движение */}
+                        <Section iconClass="ph ph-trend-up" title="5. Равноускоренное прямолинейное движение" color="rose">
+                            <p className="mb-4">Скорость тела меняется, но меняется равномерно (ускорение a = const). На этом строится 80% задач кинематики.</p>
+                            
+                            <div className="grid md:grid-cols-2 gap-4 mb-8">
+                                <Formula title="Уравнение скорости">
+                                    <span>v<sub>x</sub>(t) = v<sub>0x</sub> + a<sub>x</sub>t</span>
+                                </Formula>
+                                <Formula title="Уравнение координаты">
+                                    <span>x(t) = x<sub>0</sub> + v<sub>0x</sub>t +</span>
+                                    <Fraction top={<span>a<sub>x</sub>t<sup>2</sup></span>} bottom="2" />
+                                </Formula>
+                            </div>
+
+                            <div className="bg-rose-50 rounded-xl p-6 border border-rose-200 mb-8 flex flex-col md:flex-row items-center gap-6">
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-rose-800 mb-2 text-lg">«Безвременная» формула</h4>
+                                    <p className="text-sm text-rose-700 mb-4">Выводится из первых двух. Используется, когда даны скорости и расстояние, но ничего не сказано про время.</p>
+                                    <div className="font-mono text-xl text-rose-900 bg-white inline-flex p-3 rounded-lg shadow-sm border border-rose-100">
+                                        S<sub>x</sub> = <Fraction top={<span>v<sub>x</sub><sup>2</sup> - v<sub>0x</sub><sup>2</sup></span>} bottom={<span>2a<sub>x</sub></span>} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-800 text-white rounded-2xl p-6 shadow-lg flex flex-col md:flex-row items-center gap-8">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 text-emerald-400 font-bold mb-2">
+                                        <i className="ph ph-target text-2xl"></i> Важное графическое правило!
+                                    </div>
+                                    <p className="text-slate-300">
+                                        Площадь фигуры под графиком скорости v(t) численно равна пройденному пути. Это работает для <strong>любого</strong> движения. Если график — прямая линия под углом, то фигура — треугольник или трапеция.
+                                    </p>
+                                </div>
+                                <div className="w-full md:w-48 bg-white p-3 rounded-xl">
+                                    <svg viewBox="-10 -10 120 120" className="w-full">
+                                        <path d="M 0 100 L 0 60 L 80 20 L 80 100 Z" fill="#bbf7d0" />
+                                        <line x1="0" y1="100" x2="100" y2="100" stroke="#1e293b" strokeWidth="2" markerEnd="url(#arrow-slate)" />
+                                        <line x1="0" y1="100" x2="0" y2="0" stroke="#1e293b" strokeWidth="2" markerEnd="url(#arrow-slate)" />
+                                        <text x="95" y="115" fontSize="12" fill="#1e293b">t</text>
+                                        <text x="-10" y="5" fontSize="12" fill="#1e293b">v</text>
+                                        <path d="M 0 60 L 80 20" fill="none" stroke="#10b981" strokeWidth="3" />
+                                        <text x="35" y="75" fontSize="24" fontWeight="bold" fill="#10b981">S</text>
+                                    </svg>
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* 6. Баллистика */}
+                        <Section iconClass="ph ph-target" title="6. Свободное падение и баллистика" color="blue">
+                            <p className="mb-6">
+                                Баллистика — это просто комбинация двух независимых движений, которые происходят одновременно. Представьте, что вы бросили камень под углом α к горизонту.
+                            </p>
+
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-8 relative">
+                                <div className="absolute top-4 right-4 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm">
+                                    <i className="ph ph-play-circle text-lg"></i> Анимация
+                                </div>
+                                <svg viewBox="0 0 500 250" className="w-full max-w-2xl mx-auto block overflow-visible">
+                                    <line x1="20" y1="220" x2="480" y2="220" stroke="#64748b" strokeWidth="3" />
+                                    <path id="ballistic-path" d="M 50 220 Q 250 -50, 450 220" fill="none" stroke="#cbd5e1" strokeWidth="3" strokeDasharray="8,8" />
+                                    
+                                    <circle r="10" fill="#f59e0b" className="shadow-lg">
+                                        <animateMotion dur="4s" repeatCount="indefinite" path="M 50 220 Q 250 -50, 450 220" />
+                                    </circle>
+
+                                    <g transform="translate(50,220)">
+                                        <line x1="0" y1="0" x2="60" y2="-80" stroke="#1e293b" strokeWidth="3" markerEnd="url(#arrow-slate)"/>
+                                        <text x="65" y="-85" fontSize="14" fontWeight="bold">v₀</text>
+                                        <line x1="0" y1="0" x2="60" y2="0" stroke="#3b82f6" strokeWidth="2" markerEnd="url(#arrow-blue)"/>
+                                        <text x="25" y="15" fontSize="12" fill="#3b82f6" fontWeight="bold">v₀ₓ</text>
+                                        <line x1="0" y1="0" x2="0" y2="-80" stroke="#ef4444" strokeWidth="2" markerEnd="url(#arrow-red)"/>
+                                        <text x="-25" y="-40" fontSize="12" fill="#ef4444" fontWeight="bold">v₀y</text>
+                                        <path d="M 30 0 A 30 30 0 0 0 18 -24" fill="none" stroke="#64748b" strokeWidth="1.5" />
+                                        <text x="35" y="-10" fontSize="14" fill="#64748b">α</text>
+                                    </g>
+
+                                    <g transform="translate(250,17.5)">
+                                        <circle r="5" fill="#94a3b8" />
+                                        <line x1="0" y1="0" x2="60" y2="0" stroke="#3b82f6" strokeWidth="2" markerEnd="url(#arrow-blue)"/>
+                                        <text x="25" y="-10" fontSize="12" fill="#3b82f6" fontWeight="bold">vₓ = v₀ₓ</text>
+                                        <text x="-50" y="-10" fontSize="12" fill="#ef4444" fontWeight="bold">v_y = 0</text>
+                                    </g>
+
+                                    <g transform="translate(420, 50)">
+                                        <line x1="0" y1="0" x2="0" y2="40" stroke="#10b981" strokeWidth="3" markerEnd="url(#arrow-emerald)" />
+                                        <text x="10" y="25" fontSize="16" fontWeight="bold" fill="#10b981">g</text>
+                                    </g>
+                                </svg>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 shadow-sm">
+                                    <h4 className="font-bold text-blue-800 text-lg mb-3 border-b border-blue-200 pb-2">Ось X (Горизонталь)</h4>
+                                    <p className="text-sm mb-3">По горизонтали ничего не действует. Ускорения нет (aₓ = 0). Движение <strong>равномерное</strong>.</p>
+                                    <ul className="space-y-2 text-sm font-mono bg-white p-3 rounded border border-blue-100">
+                                        <li>v<sub>0x</sub> = v<sub>0</sub> · cos(α)</li>
+                                        <li>x(t) = v<sub>0</sub> · cos(α) · t</li>
+                                    </ul>
+                                </div>
+                                <div className="bg-rose-50 border border-rose-100 rounded-xl p-5 shadow-sm">
+                                    <h4 className="font-bold text-rose-800 text-lg mb-3 border-b border-rose-200 pb-2">Ось Y (Вертикаль)</h4>
+                                    <p className="text-sm mb-3">Камень летит <strong>равноускоренно</strong> (ускорение g направлено против оси Y, берем с минусом).</p>
+                                    <ul className="space-y-2 text-sm font-mono bg-white p-3 rounded border border-rose-100">
+                                        <li>v<sub>0y</sub> = v<sub>0</sub> · sin(α)</li>
+                                        <li>v<sub>y</sub>(t) = v<sub>0</sub> · sin(α) - gt</li>
+                                        <li>y(t) = v<sub>0</sub> · sin(α) · t - <Fraction top="gt²" bottom="2" /></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-6 text-center">
+                                В любой момент времени полная скорость ищется по теореме Пифагора:
+                                <div className="inline-block mt-2 font-mono text-xl bg-slate-800 text-emerald-300 px-4 py-2 rounded-lg shadow-md">
+                                    v = √(v<sub>x</sub>² + v<sub>y</sub>²)
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* 7. Окружность */}
+                        <Section iconClass="ph ph-circle-dashed" title="7. Движение по окружности" color="purple">
+                            <p className="mb-6">
+                                Даже если скорость по модулю постоянна, тело все равно имеет ускорение! Почему? Потому что скорость — это вектор, и ее <strong>направление</strong> постоянно меняется.
+                            </p>
+
+                            <div className="flex flex-col md:flex-row gap-8 items-center">
+                                <div className="w-full md:w-1/3 flex justify-center relative">
+                                    <svg viewBox="0 0 200 200" className="w-full max-w-[200px] drop-shadow-lg">
+                                        <circle cx="100" cy="100" r="80" fill="none" stroke="#e2e8f0" strokeWidth="4" />
+                                        <circle cx="100" cy="100" r="5" fill="#1e293b" />
+                                        <text x="105" y="115" fontSize="14" fontWeight="bold">O</text>
+                                        
+                                        <g>
+                                            <animateTransform attributeName="transform" type="rotate" from="0 100 100" to="360 100 100" dur="5s" repeatCount="indefinite" />
+                                            <line x1="100" y1="100" x2="100" y2="20" stroke="#94a3b8" strokeWidth="2" strokeDasharray="4,4" />
+                                            <text x="85" y="60" fontSize="14" fill="#64748b" transform="rotate(-90 85 60)">R</text>
+                                            <circle cx="100" cy="20" r="10" fill="#8b5cf6" />
+                                            <line x1="100" y1="20" x2="160" y2="20" stroke="#3b82f6" strokeWidth="3" markerEnd="url(#arrow-blue)" />
+                                            <text x="140" y="10" fontSize="16" fontWeight="bold" fill="#3b82f6">v</text>
+                                            <line x1="100" y1="20" x2="100" y2="60" stroke="#ef4444" strokeWidth="3" markerEnd="url(#arrow-red)" />
+                                            <text x="110" y="50" fontSize="16" fontWeight="bold" fill="#ef4444">aₑ</text>
+                                        </g>
+                                    </svg>
+                                </div>
+                                
+                                <div className="w-full md:w-2/3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="bg-white p-4 border rounded-xl shadow-sm">
+                                        <div className="font-bold text-slate-800 mb-1">Период (T)</div>
+                                        <p className="text-xs text-slate-500 mb-2">Время одного полного оборота [с].</p>
+                                        <div className="font-mono text-sm bg-slate-100 p-2 rounded">T = 1 / ν</div>
+                                    </div>
+                                    
+                                    <div className="bg-white p-4 border rounded-xl shadow-sm">
+                                        <div className="font-bold text-slate-800 mb-1">Частота (ν)</div>
+                                        <p className="text-xs text-slate-500 mb-2">Количество оборотов за 1 с [Гц].</p>
+                                        <div className="font-mono text-sm bg-slate-100 p-2 rounded">ν = 1 / T</div>
+                                    </div>
+                                    
+                                    <div className="bg-white p-4 border rounded-xl shadow-sm">
+                                        <div className="font-bold text-slate-800 mb-1 text-blue-600">Линейная скорость (v)</div>
+                                        <p className="text-xs text-slate-500 mb-2">Направлена по касательной.</p>
+                                        <div className="font-mono text-sm bg-blue-50 text-blue-800 p-2 rounded">v = (2πR) / T = ωR</div>
+                                    </div>
+                                    
+                                    <div className="bg-white p-4 border rounded-xl shadow-sm">
+                                        <div className="font-bold text-slate-800 mb-1 text-purple-600">Угловая скорость (ω)</div>
+                                        <p className="text-xs text-slate-500 mb-2">На какой угол поворачивается радиус за 1 с.</p>
+                                        <div className="font-mono text-sm bg-purple-50 text-purple-800 p-2 rounded">ω = 2π / T</div>
+                                    </div>
+
+                                    <div className="bg-rose-50 p-4 border border-rose-100 rounded-xl shadow-sm sm:col-span-2">
+                                        <div className="font-bold text-rose-700 mb-1 flex items-center gap-2">
+                                            <i className="ph ph-target text-lg"></i> Центростремительное ускорение (a_c)
+                                        </div>
+                                        <p className="text-xs text-rose-600 mb-2">Отвечает за изменение направления. Направлено в центр.</p>
+                                        <div className="font-mono text-lg text-center font-bold text-rose-900">
+                                            a<sub>c</sub> = <Fraction top="v²" bottom="R" /> = ω²R
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* 8. Относительность */}
+                        <Section iconClass="ph ph-train" title="8. Относительность движения" color="emerald">
+                            <p className="mb-4">
+                                Закон сложения скоростей Галилея: <strong>Абсолютная скорость = относительная + переносная.</strong> Важно помнить, что складывать нужно именно <em>векторы</em>.
+                            </p>
+
+                            <Formula>
+                                <span>v⃗<sub>абс</sub> = v⃗<sub>отн</sub> + v⃗<sub>пер</sub></span>
+                            </Formula>
+
+                            <div className="bg-white border rounded-2xl p-6 shadow-sm flex flex-col items-center">
+                                <h4 className="font-bold text-slate-800 mb-4 w-full">Пример: Вы идете по вагону движущегося поезда.</h4>
+                                <svg viewBox="0 0 400 150" className="w-full max-w-lg mb-4">
+                                    <line x1="0" y1="130" x2="400" y2="130" stroke="#94a3b8" strokeWidth="4" />
+                                    <rect x="50" y="50" width="200" height="70" rx="5" fill="#e2e8f0" stroke="#64748b" strokeWidth="3" />
+                                    <circle cx="80" cy="125" r="10" fill="#334155" />
+                                    <circle cx="220" cy="125" r="10" fill="#334155" />
+                                    
+                                    <line x1="150" y1="30" x2="250" y2="30" stroke="#3b82f6" strokeWidth="3" markerEnd="url(#arrow-blue)" />
+                                    <text x="160" y="20" fontSize="14" fill="#3b82f6" fontWeight="bold">v_поезда (переносная)</text>
+
+                                    <circle cx="100" cy="90" r="8" fill="#f59e0b" />
+                                    <line x1="100" y1="98" x2="100" y2="115" stroke="#f59e0b" strokeWidth="3" />
+                                    <line x1="100" y1="90" x2="140" y2="90" stroke="#ef4444" strokeWidth="2" markerEnd="url(#arrow-red)" />
+                                    <text x="90" y="75" fontSize="12" fill="#ef4444" fontWeight="bold">v_человека (относит.)</text>
+
+                                    <line x1="100" y1="145" x2="240" y2="145" stroke="#10b981" strokeWidth="4" markerEnd="url(#arrow-emerald)" />
+                                    <text x="120" y="165" fontSize="14" fill="#10b981" fontWeight="bold">v_абсолютная (земля)</text>
+                                </svg>
+                                <p className="text-sm text-center text-slate-600 bg-slate-50 p-3 rounded-lg w-full">
+                                    Ваша скорость относительно земли = Ваша скорость относительно вагона + Скорость вагона относительно земли.
+                                </p>
+                            </div>
+                        </Section>
+
+                        {/* Examples Section */}
+                        <div className="mt-16 border-t-2 border-slate-200 pt-12">
+                            <h2 className="text-3xl font-bold text-slate-800 mb-8 text-center flex items-center justify-center gap-3">
+                                <i className="ph ph-clock text-blue-500 text-4xl"></i>
+                                Примеры применения теории
+                            </h2>
+                            
+                            <ExampleCard 
+                                title="Пример 1: Работа с графиком скорости"
+                                condition="Дан график v(t). Это прямая линия, выходящая из начала координат (0;0) и проходящая через точку (4 сек; 12 м/с). Найти ускорение и путь за первые 4 секунды."
+                                analysis={
+                                    <>
+                                        <p><strong>1. Ускорение</strong> — это изменение скорости за время. За 4 секунды скорость изменилась с 0 до 12.</p>
+                                        <div className="font-mono bg-white p-2 rounded border inline-block my-2 text-slate-800">a = (12 - 0) / 4 = 3 м/с²</div>
+                                        <p><strong>2. Путь</strong> — это площадь под графиком. Фигура — прямоугольный треугольник. Основание = 4, высота = 12.</p>
+                                        <div className="font-mono bg-white p-2 rounded border inline-block my-2 text-slate-800">S = ½ · 4 · 12 = 24 метра</div>
+                                    </>
+                                }
+                            />
+
+                            <ExampleCard 
+                                title="Пример 2: Работа с уравнением движения"
+                                condition="Дано уравнение координаты материальной точки: x(t) = 15 - 4t + 2t². Написать уравнение скорости этой точки и найти, через сколько секунд она остановится."
+                                analysis={
+                                    <>
+                                        <p>Берем общий вид уравнения: <span className="font-mono bg-white px-1 rounded text-slate-800">x(t) = x₀ + v₀ₓt + aₓt²/2</span></p>
+                                        <p>Сопоставляем коэффициенты:</p>
+                                        <ul className="list-disc pl-5 my-2 space-y-1 font-mono text-slate-800">
+                                            <li>x₀ = 15</li>
+                                            <li>v₀ₓ = -4 м/с</li>
+                                            <li>aₓ/2 = 2 ➔ aₓ = 4 м/с²</li>
+                                        </ul>
+                                        <p>Пишем уравнение скорости (общий вид <span className="font-mono text-slate-800">vₓ(t) = v₀ₓ + aₓt</span>):</p>
+                                        <div className="font-mono bg-white p-2 rounded border inline-block my-2 font-bold text-blue-700">vₓ(t) = -4 + 4t</div>
+                                        <p>Точка остановится, когда ее скорость станет равна нулю:</p>
+                                        <div className="font-mono bg-white p-2 rounded border inline-block my-2 text-slate-800">0 = -4 + 4t ➔ 4t = 4 ➔ t = 1 секунда.</div>
+                                    </>
+                                }
+                            />
+
+                            <ExampleCard 
+                                title="Пример 3: Понимание баллистики"
+                                condition="Тело бросили под углом к горизонту. Как изменятся время полета и дальность полета, если увеличить начальную скорость в 2 раза, сохранив угол?"
+                                analysis={
+                                    <>
+                                        <p><strong>Время полета</strong> зависит от вертикальной скорости. Тело летит вверх, пока вертикальная скорость <span className="font-mono text-slate-800">v₀sin(α)</span> не погасится ускорением <span className="font-mono text-slate-800">g</span>. Время подъема: <span className="font-mono text-slate-800">t = v₀sin(α)/g</span>. Полное время в 2 раза больше. Если v₀ увеличить в 2 раза, время полета увеличится <strong>строго в 2 раза</strong>.</p>
+                                        <hr className="my-3 border-blue-200" />
+                                        <p><strong>Дальность полета</strong> — это движение по горизонтали: <span className="font-mono text-slate-800">L = vₓ · t_полное = (v₀cos(α)) · t_полное</span>.</p>
+                                        <p>Поскольку сама горизонтальная скорость увеличилась в 2 раза, да еще и время полета увеличилось в 2 раза, дальность полета увеличится в <strong>2 · 2 = 4 раза</strong>.</p>
+                                    </>
+                                }
+                            />
+                        </div>
+
+                    </main>
+                    
+                    <footer className="bg-slate-900 text-slate-400 py-8 text-center text-sm">
+                        <p>© Интерактивный гид по физике. Успехов на экзаменах!</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        // Рендерим React в DOM
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
